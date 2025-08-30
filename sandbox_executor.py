@@ -1,5 +1,6 @@
 import argparse, json, os, sys, pathlib, signal, time, platform, asyncio, traceback
-from models import AgentSpec
+from models import AgentSpec, SDKConfig
+from memory import JsonFileMemory
 import tempfile
 from pydantic_ai import Agent, TextOutput
 from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
@@ -48,15 +49,37 @@ def http_get(url: str, allow: list[str] = None):
     except Exception as e:
         return f"HTTP error: {e}"
 
+def conversational_memory(cmd: str, entry: Optional[Dict[str, Any]] = None, agent_id: str = None, run_id: str = None):
+    if not agent_id or not run_id:
+        return "Error: agent_id and run_id are required"
+
+    memory_dir = pathlib.Path("runs") / agent_id / run_id / "memory"
+    memory_file = memory_dir / "conversation.json"
+    memory = JsonFileMemory(memory_file)
+
+    if cmd == "read":
+        return memory.read()
+    elif cmd == "append" and entry is not None:
+        memory.append(entry)
+        return "OK"
+    else:
+        return "Invalid command"
+
 TOOLS = {
     "math_eval": lambda args: math_eval(args.get("expr","")),
     "string_template": lambda args: string_template(args.get("template",""), **args.get("vars",{})),
     "kv_memory": lambda args: (kv_memory_set(args["key"], args.get("value")) if "value" in args else kv_memory_get(args["key"])),
     "http_get": lambda args: http_get(args.get("url",""), allow=args.get("allow",[])),
     "web_search": duckduckgo_search_tool(),
+    "conversational_memory": lambda args: conversational_memory(
+        cmd=args.get("cmd"),
+        entry=args.get("entry"),
+        agent_id=args.get("agent_id"),
+        run_id=args.get("run_id")
+    ),
 }
 
-async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path):
+async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path, run_id: str):
     """Run an agent asynchronously with the given spec and inputs."""
     out_dir.mkdir(parents=True, exist_ok=True)
     logs = []
@@ -128,7 +151,10 @@ async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path):
             if spec.tools:
                 for tool_ref in spec.tools:
                     if tool_ref.name in TOOLS:
-                        enabled_tools.append(TOOLS[tool_ref.name])
+                        tool_func = TOOLS[tool_ref.name]
+                        # Pass agent_id and run_id to the tool's arguments
+                        tool_with_context = lambda args, s=spec, r=run_id, tf=tool_func: tf({**args, 'agent_id': s.id, 'run_id': r})
+                        enabled_tools.append(tool_with_context)
 
             agent = Agent(
                 model=spec.sdk_config.model,
@@ -208,18 +234,19 @@ Inputs:
         
         return 1  # Error
 
-def run_agent(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path) -> int:
+def run_agent(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path, run_id: str) -> int:
     """Synchronous wrapper for running the agent asynchronously.
     
     Args:
         spec: The agent specification
         inputs: Input dictionary for the agent
         out_dir: Directory to write output files to
+        run_id: The ID of the current run
         
     Returns:
         int: 0 on success, 1 on error
     """
-    return asyncio.run(run_agent_async(spec, inputs, out_dir))
+    return asyncio.run(run_agent_async(spec, inputs, out_dir, run_id))
 
 def log_event(log_file, event, **kwargs):
     """Append a log entry to the log file.
@@ -331,6 +358,7 @@ def main():
     run_parser.add_argument("--input_path", required=False, help="Path to input file (JSON or YAML)")
     run_parser.add_argument("--input", required=False, help="Input data (JSON or YAML)")
     run_parser.add_argument("--out", default="./output", help="Output directory")
+    run_parser.add_argument("--run_id", required=True, help="ID of the run")
     
     # Create command
     create_parser = subparsers.add_parser('create', help='Create a new agent')
@@ -382,7 +410,7 @@ def main():
             print(f"System instructions: {spec.system_instructions[:100]}...")
             print(f"Task prompt: {spec.task_prompt[:100]}...")
             
-            result = run_agent(spec, inputs, out_dir)
+            result = run_agent(spec, inputs, out_dir, args.run_id)
             print(f"Agent execution completed with result: {result}")
             
             # Check output files
@@ -411,12 +439,10 @@ def main():
         return 1
     return 0
 
-def smoke_test(use_local: bool = False):
+def smoke_test():
     """Run a simple smoke test to verify the executor works
-    
-    Args:
-        use_local: If True, use the local Ollama model instead of OpenAI
     """
+    use_local = True
     print("🔍 Running smoke test...")
     print(f"Using {'local Ollama model' if use_local else 'OpenAI model'}")
     
@@ -441,9 +467,8 @@ def smoke_test(use_local: bool = False):
         system_instructions="You are a helpful assistant.",
         task_prompt="Say hello and tell me what time it is.",
         input_schema=[],
-        sdk_config=sdk_config
+        sdk_config=SDKConfig(use_local=use_local)
     )
-    
     print("✅ Created test agent spec")
     
     # Create a test input
@@ -458,7 +483,8 @@ def smoke_test(use_local: bool = False):
         
         print("🚀 Running agent...")
         try:
-            result = run_agent(spec, inputs, temp_dir)
+            run_id = os.urandom(6).hex()
+            result = run_agent(spec, inputs, temp_dir, run_id)
             print(f"✅ Agent completed with result: {result}")
         except Exception as e:
             print(f"❌ Agent execution failed: {str(e)}")
@@ -526,7 +552,6 @@ if __name__ == "__main__":
     
     # If --smoke-test flag is passed, run the smoke test
     if "--smoke-test" in sys.argv:
-        use_local = "--local" in sys.argv
-        sys.exit(0 if smoke_test(use_local=use_local) else 1)
+        sys.exit(0 if smoke_test() else 1)
     else:
         sys.exit(main())
