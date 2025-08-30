@@ -67,7 +67,7 @@ with tabs[0]:
             row["default"] = st.text_input("default (string or JSON)", key=f"default_{i}", value="" if row.get("default") in [None,"None"] else str(row.get("default")))
 
     st.subheader("Tools")
-    tool_names = ["math_eval","string_template","kv_memory","http_get"]
+    tool_names = ["math_eval","string_template","kv_memory","http_get", "web_search"]
     selected_tools = st.multiselect("Enable tools", tool_names, default=[])
     tools = [ToolRef(name=t) for t in selected_tools]
 
