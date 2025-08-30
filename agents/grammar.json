@@ -1,0 +1,24 @@
+{
+  "version": "v0",
+  "id": "10277e8926604b0db513a8b717f80f68",
+  "name": "TestAgent",
+  "description": "Grammar fixer",
+  "system_instructions": "Given a string, check it for grammar and spelling mistakes, and recommend corrections",
+  "task_prompt": "Fix any grammar and spelling mistakes in the input provided",
+  "input_schema": [
+    {
+      "name": "text",
+      "type": "str",
+      "description": "The text to check for grammar and spelling mistakes"
+    }
+  ],
+  "tools": [],
+  "run_limits": {
+    "timeout_s": 30,
+    "max_output_chars": 8000
+  },
+  "sdk_config": {
+    "model": "gpt-4o-mini",
+    "temperature": 0.2
+  }
+}
