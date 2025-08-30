@@ -2,6 +2,7 @@ import argparse, json, os, sys, pathlib, signal, time, platform, asyncio, traceb
 from models import AgentSpec
 import tempfile
 from pydantic_ai import Agent, TextOutput
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
 from openai import OpenAI
 from dotenv import load_dotenv
 import yaml
@@ -52,6 +53,7 @@ TOOLS = {
     "string_template": lambda args: string_template(args.get("template",""), **args.get("vars",{})),
     "kv_memory": lambda args: (kv_memory_set(args["key"], args.get("value")) if "value" in args else kv_memory_get(args["key"])),
     "http_get": lambda args: http_get(args.get("url",""), allow=args.get("allow",[])),
+    "web_search": duckduckgo_search_tool(),
 }
 
 async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path):
@@ -121,11 +123,19 @@ async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path):
             if hasattr(spec.sdk_config, 'temperature') and spec.sdk_config.temperature is not None:
                 model_settings["temperature"] = spec.sdk_config.temperature
             
+            # Dynamically create tools based on the spec
+            enabled_tools = []
+            if spec.tools:
+                for tool_ref in spec.tools:
+                    if tool_ref.name in TOOLS:
+                        enabled_tools.append(TOOLS[tool_ref.name])
+
             agent = Agent(
                 model=spec.sdk_config.model,
                 model_settings=model_settings,
                 instructions=spec.system_instructions,
-                name=spec.name
+                name=spec.name,
+                tools=enabled_tools,
             )
         
         # Format the user message
@@ -418,7 +428,7 @@ def smoke_test(use_local: bool = False):
     
     if not use_local:
         sdk_config.update({
-            "model": "gpt-5",
+            "model": "openai:gpt-4o-mini",
             # Use default temperature for GPT-5
             "max_tokens": 1000,
             "max_output_chars": 1000

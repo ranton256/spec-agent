@@ -11,7 +11,7 @@ class InputField(BaseModel):
     help: Optional[str] = None
 
 class ToolRef(BaseModel):
-    name: Literal["math_eval","string_template","kv_memory","http_get"]
+    name: Literal["math_eval","string_template","kv_memory","http_get", "web_search"]
     params: Dict[str, Any] = Field(default_factory=dict)
 
 class RunLimits(BaseModel):
