@@ -4,3 +4,4 @@ pydantic_ai
 google-genai
 python-dotenv
 pyyaml
+ollama

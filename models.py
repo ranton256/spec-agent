@@ -20,7 +20,9 @@ class RunLimits(BaseModel):
 
 class SDKConfig(BaseModel):
     model: str = "gpt-4o-mini"
-    temperature: float = 0.2
+    temperature: Optional[float] = None  # Optional, will use model's default if not set
+    use_local: bool = False
+    local_model: str = "gemma3n"
 
 class AgentSpec(BaseModel):
     version: str = "v0"

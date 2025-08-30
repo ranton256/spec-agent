@@ -1,6 +1,7 @@
 import json, os, pathlib, subprocess, time
 import streamlit as st
 from models import AgentSpec, InputField, ToolRef, RunRecord
+from dotenv import load_dotenv
 
 BASE = pathlib.Path(".")
 AGENTS_DIR = BASE / "agents"
@@ -9,6 +10,36 @@ AGENTS_DIR.mkdir(exist_ok=True)
 RUNS_DIR.mkdir(exist_ok=True)
 
 st.set_page_config(page_title="SpecAgent", layout="wide")
+
+# Load environment variables
+load_dotenv()
+
+# Sidebar for API key and settings
+with st.sidebar:
+    st.header("Settings")
+    
+    # Check if OPENAI_API_KEY is already set in environment
+    env_api_key = os.getenv("OPENAI_API_KEY")
+    
+    if env_api_key:
+        st.info("OpenAI API key is set in environment")
+        api_key = st.text_input(
+            "OpenAI API Key",
+            value="•" * 20,  # Show placeholder dots if key is set
+            type="password",
+            disabled=True,
+            help="API key is set in environment variables"
+        )
+    else:
+        api_key = st.text_input(
+            "OpenAI API Key",
+            type="password",
+            help="Enter your OpenAI API key (stored in session state only)"
+        )
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key
+            st.success("API key set for this session")
+
 tabs = st.tabs(["Create/Edit Agent", "My Agents", "Run Agent"])
 
 # --- Tab 1: Create/Edit Agent ---
@@ -40,11 +71,26 @@ with tabs[0]:
     selected_tools = st.multiselect("Enable tools", tool_names, default=[])
     tools = [ToolRef(name=t) for t in selected_tools]
 
-    st.subheader("Limits & Model (stubbed)")
-    timeout = st.number_input("Timeout (s)", 1, 600, 30)
-    max_out = st.number_input("Max output chars", 100, 50000, 8000)
-    model = st.text_input("Model id (not used in stub)", value="gpt-4o-mini")
-    temp = st.slider("Temperature (not used in stub)", 0.0, 1.0, 0.2, 0.05)
+    st.subheader("Model & Limits")
+    
+    # Model source selection
+    model_source = st.radio("Model Source", ["OpenAI", "Local (Ollama)"], horizontal=True)
+    use_local = model_source == "Local (Ollama)"
+    
+    if use_local:
+        model = st.text_input("Local model name", value="gemma3n", help="Name of the Ollama model to use")
+    else:
+        model = st.text_input("OpenAI model", value="gpt-4o-mini", help="OpenAI model identifier")
+    
+    # Common settings
+    temp = st.slider("Temperature", 0.0, 1.0, 0.2, 0.05)
+    
+    # Limits
+    col1, col2 = st.columns(2)
+    with col1:
+        timeout = st.number_input("Timeout (s)", 1, 600, 30)
+    with col2:
+        max_out = st.number_input("Max output chars", 100, 50000, 8000)
 
     if st.button("Save Agent", type="primary"):
         spec = AgentSpec(
@@ -62,7 +108,12 @@ with tabs[0]:
             ],
             tools=tools,
             run_limits={"timeout_s": timeout, "max_output_chars": max_out},
-            sdk_config={"model": model, "temperature": temp},
+            sdk_config={
+                "model": model, 
+                "temperature": temp,
+                "use_local": use_local,
+                "local_model": "gemma3n" if use_local else ""
+            },
         )
         agent_dir = AGENTS_DIR / spec.id
         agent_dir.mkdir(exist_ok=True, parents=True)
@@ -71,12 +122,22 @@ with tabs[0]:
 
     st.subheader("Preview JSON")
     st.code(json.dumps({
-        "name": name, "description": desc,
-        "system_instructions": system, "task_prompt": task,
+        "name": name, 
+        "description": desc,
+        "system_instructions": system, 
+        "task_prompt": task,
         "input_schema": st.session_state["input_rows"],
         "tools": [t for t in selected_tools],
-        "run_limits":{"timeout_s":timeout,"max_output_chars":max_out},
-        "sdk_config":{"model":model,"temperature":temp}
+        "run_limits": {
+            "timeout_s": timeout,
+            "max_output_chars": max_out
+        },
+        "sdk_config": {
+            "model": model,
+            "temperature": temp,
+            "use_local": use_local,
+            "local_model": "gemma3n" if use_local else ""
+        }
     }, indent=2), language="json")
 
 # --- Tab 2: My Agents ---
@@ -171,7 +232,7 @@ with tabs[2]:
             
             # Create input file with the form values
             input_file = run_dir / "input.json"
-            input_file.write_text(json.dumps(serializable_values, indent=2), encoding="utf-8")
+            input_file.write_text(json.dumps(values, indent=2), encoding="utf-8")
             
             # Build the command
             cmd = ["python", "sandbox_executor.py", "run", "--agent", str(agent_spec_path), "--input_path", str(input_file), "--out", str(run_dir)]

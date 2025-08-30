@@ -66,18 +66,67 @@ async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path):
         log_event(log_file, ev, **kw)
 
     try:
-        # Create the agent instance with GPT-5
-        agent = Agent(
-            model="gpt-5",
-            model_settings={
-                "max_tokens": spec.run_limits.max_output_chars
-            },
-            instructions=spec.system_instructions,
-            name=spec.name
+        model_name = spec.sdk_config.local_model if spec.sdk_config.use_local else spec.sdk_config.model
+        log("model_call", 
+            model=model_name, 
+            is_local=spec.sdk_config.use_local,
+            settings=spec.sdk_config.model_dump()
         )
         
-        # Log model call
-        log("model_call", model="gpt-5", settings=spec.sdk_config.model_dump())
+        if spec.sdk_config.use_local:
+            # Use Ollama local model
+            import ollama
+            
+            # Ensure the model is available
+            try:
+                await asyncio.to_thread(ollama.show, model_name)
+            except Exception as e:
+                log("error", message=f"Model {model_name} not found, attempting to pull")
+                await asyncio.to_thread(ollama.pull, model_name)
+            
+            # Create a simple agent that uses Ollama
+            class OllamaAgent:
+                def __init__(self, model, system, temperature):
+                    self.model = model
+                    self.system = system
+                    self.temperature = temperature
+                
+                async def run(self, prompt):
+                    response = await asyncio.to_thread(
+                        ollama.chat,
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": self.system},
+                            {"role": "user", "content": prompt}
+                        ],
+                        options={
+                            "temperature": self.temperature,
+                            "num_predict": spec.run_limits.max_output_chars
+                        }
+                    )
+                    return response['message']['content']
+            
+            agent = OllamaAgent(
+                model=model_name,
+                system=spec.system_instructions,
+                temperature=spec.sdk_config.temperature if hasattr(spec.sdk_config, 'temperature') else None
+            )
+        else:
+            # Use Pydantic AI with OpenAI
+            model_settings = {
+                "max_tokens": spec.run_limits.max_output_chars
+            }
+            
+            # Only add temperature if it's explicitly set in the config
+            if hasattr(spec.sdk_config, 'temperature') and spec.sdk_config.temperature is not None:
+                model_settings["temperature"] = spec.sdk_config.temperature
+            
+            agent = Agent(
+                model=spec.sdk_config.model,
+                model_settings=model_settings,
+                instructions=spec.system_instructions,
+                name=spec.name
+            )
         
         # Format the user message
         user_message = f"""Task:
@@ -352,9 +401,28 @@ def main():
         return 1
     return 0
 
-def smoke_test():
-    """Run a simple smoke test to verify the executor works"""
+def smoke_test(use_local: bool = False):
+    """Run a simple smoke test to verify the executor works
+    
+    Args:
+        use_local: If True, use the local Ollama model instead of OpenAI
+    """
     print("🔍 Running smoke test...")
+    print(f"Using {'local Ollama model' if use_local else 'OpenAI model'}")
+    
+    # Configure the model settings
+    sdk_config = {
+        "use_local": use_local,
+        "local_model": "gemma3n"
+    }
+    
+    if not use_local:
+        sdk_config.update({
+            "model": "gpt-5",
+            # Use default temperature for GPT-5
+            "max_tokens": 1000,
+            "max_output_chars": 1000
+        })
     
     # Create a simple agent spec
     spec = AgentSpec(
@@ -362,7 +430,8 @@ def smoke_test():
         description="A test agent for smoke testing",
         system_instructions="You are a helpful assistant.",
         task_prompt="Say hello and tell me what time it is.",
-        input_schema=[]
+        input_schema=[],
+        sdk_config=sdk_config
     )
     
     print("✅ Created test agent spec")
@@ -441,12 +510,13 @@ if __name__ == "__main__":
     # Load environment variables from .env file
     load_dotenv()
     
-    # Check if OPENAI_API_KEY is set
-    if not os.getenv("OPENAI_API_KEY"):
+    # Check if OPENAI_API_KEY is set when not using local model
+    if not os.getenv("OPENAI_API_KEY") and "--local" not in sys.argv:
         print("Warning: OPENAI_API_KEY not found in environment variables or .env file")
     
     # If --smoke-test flag is passed, run the smoke test
     if "--smoke-test" in sys.argv:
-        sys.exit(0 if smoke_test() else 1)
+        use_local = "--local" in sys.argv
+        sys.exit(0 if smoke_test(use_local=use_local) else 1)
     else:
         sys.exit(main())
