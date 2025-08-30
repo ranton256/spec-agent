@@ -125,9 +125,37 @@ with tabs[2]:
             run_id = os.urandom(6).hex()
             run_dir = RUNS_DIR / spec.id / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
-            (run_dir / "input.json").write_text(json.dumps(values), encoding="utf-8")
+            
+            # Debug: Print the values being written
+            st.write("Input values:", values)
+            
+            # Ensure values are JSON serializable
+            serializable_values = {}
+            for k, v in values.items():
+                if hasattr(v, 'model_dump_json'):  # Handle Pydantic models
+                    serializable_values[k] = json.loads(v.model_dump_json())
+                else:
+                    serializable_values[k] = v
+            
+            # Write the input file
+            input_file = run_dir / "input.json"
+            input_file.write_text(json.dumps(serializable_values, indent=2), encoding="utf-8")
+            st.write(f"Input file written to: {input_file}")
+            st.code(input_file.read_text(), language="json")
 
-            cmd = ["python","sandbox_executor.py","--agent",spec.id,"--input",str(run_dir/"input.json"),"--out",str(run_dir)]
+            # Use the full path to the agent's spec file
+            agent_spec_path = AGENTS_DIR / spec.id / "spec.json"
+            
+            # Debug: Verify agent spec file exists
+            st.write(f"Agent spec path: {agent_spec_path}")
+            st.write(f"Agent spec exists: {agent_spec_path.exists()}")
+            
+            if agent_spec_path.exists():
+                st.write("Agent spec content:")
+                st.code(agent_spec_path.read_text(), language="json")
+            
+            cmd = ["python", "sandbox_executor.py", "run", "--agent", str(agent_spec_path), "--input_path", str(input_file), "--out", str(run_dir)]
+            st.write("Command:", " ".join(cmd))
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
             st.subheader("Logs")
