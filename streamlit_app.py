@@ -121,58 +121,123 @@ with tabs[2]:
             else:
                 values[f.name] = st.text_area(label, value=json.dumps(f.default) if f.default is not None else "")
 
+        # Add debug mode dropdown
+        debug_mode = st.selectbox(
+            "Debug Mode",
+            ["Off", "Basic", "Verbose"],
+            index=0,
+            help="Control the visibility of diagnostic messages and logs"
+        )
+        
         if st.button("Run in Sandbox", type="primary"):
             run_id = os.urandom(6).hex()
             run_dir = RUNS_DIR / spec.id / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
             
-            # Debug: Print the values being written
-            st.write("Input values:", values)
-            
-            # Ensure values are JSON serializable
-            serializable_values = {}
-            for k, v in values.items():
-                if hasattr(v, 'model_dump_json'):  # Handle Pydantic models
-                    serializable_values[k] = json.loads(v.model_dump_json())
-                else:
-                    serializable_values[k] = v
-            
-            # Write the input file
-            input_file = run_dir / "input.json"
-            input_file.write_text(json.dumps(serializable_values, indent=2), encoding="utf-8")
-            st.write(f"Input file written to: {input_file}")
-            st.code(input_file.read_text(), language="json")
+            # Show debug info based on debug mode
+            if debug_mode != "Off":
+                with st.expander("Debug Information", expanded=False):
+                    st.write("### Input Values")
+                    st.json(values)
+                    
+                    # Ensure values are JSON serializable
+                    serializable_values = {}
+                    for k, v in values.items():
+                        if hasattr(v, 'model_dump_json'):  # Handle Pydantic models
+                            serializable_values[k] = json.loads(v.model_dump_json())
+                        else:
+                            serializable_values[k] = v
+                    
+                    # Write the input file
+                    input_file = run_dir / "input.json"
+                    input_file.write_text(json.dumps(serializable_values, indent=2), encoding="utf-8")
+                    
+                    st.write("### Input File")
+                    st.write(f"Path: `{input_file}`")
+                    st.code(input_file.read_text(), language="json")
+                    
+                    # Show agent spec info in verbose mode
+                    if debug_mode == "Verbose":
+                        agent_spec_path = AGENTS_DIR / spec.id / "spec.json"
+                        st.write("### Agent Spec")
+                        st.write(f"Path: `{agent_spec_path}`")
+                        if agent_spec_path.exists():
+                            st.code(agent_spec_path.read_text(), language="json")
+                        else:
+                            st.error("Agent spec file not found")
 
             # Use the full path to the agent's spec file
             agent_spec_path = AGENTS_DIR / spec.id / "spec.json"
             
-            # Debug: Verify agent spec file exists
-            st.write(f"Agent spec path: {agent_spec_path}")
-            st.write(f"Agent spec exists: {agent_spec_path.exists()}")
+            # Create input file with the form values
+            input_file = run_dir / "input.json"
+            input_file.write_text(json.dumps(serializable_values, indent=2), encoding="utf-8")
             
-            if agent_spec_path.exists():
-                st.write("Agent spec content:")
-                st.code(agent_spec_path.read_text(), language="json")
-            
+            # Build the command
             cmd = ["python", "sandbox_executor.py", "run", "--agent", str(agent_spec_path), "--input_path", str(input_file), "--out", str(run_dir)]
-            st.write("Command:", " ".join(cmd))
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-
-            st.subheader("Logs")
-            logbox = st.empty()
-            buf = ""
-            while True:
-                line = proc.stdout.readline()
-                if not line:
-                    if proc.poll() is not None:
-                        break
-                    time.sleep(0.05); continue
-                buf += line
-                logbox.code(buf)
-            code = proc.wait()
-            st.write(f"Exit code: {code}")
+            
+            # Show command in debug mode
+            if debug_mode != "Off":
+                with st.expander("Execution Details", expanded=False):
+                    st.write("### Agent Spec Location")
+                    st.code(f"{agent_spec_path}", language="text")
+                    st.write("### Input File")
+                    st.code(input_file.read_text(), language="json")
+                    st.write("### Command")
+                    st.code(" ".join(cmd), language="bash")
+            
+            # Show execution status
+            status_text = st.empty()
+            status_text.info("Running agent...")
+            
+            # Run the agent
+            if debug_mode != "Off":
+                # In debug mode, show live logs
+                log_expander = st.expander("Show Execution Logs", expanded=False)
+                with log_expander:
+                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True)
+                    logbox = st.empty()
+                    buf = ""
+                    while True:
+                        line = proc.stdout.readline()
+                        if not line:
+                            if proc.poll() is not None:
+                                break
+                            time.sleep(0.05)
+                            continue
+                        buf += line
+                        logbox.code(buf)
+                    code = proc.wait()
+            else:
+                # In non-debug mode, just run without showing output
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                code = proc.wait()
+            
+            # Update status
+            if code == 0:
+                status_text.success("Agent execution completed successfully!")
+            else:
+                status_text.error(f"Agent execution failed with code {code}")
+                
+                # Show error details if available
+                if debug_mode != "Off":
+                    st.error("Error details:")
+                    st.code(proc.stderr.read() if proc.stderr else "No error details available")
+            
+            # Show results
+            st.subheader("Result")
             res_path = run_dir / "result.json"
             if res_path.exists():
-                st.json(json.loads(res_path.read_text()))
+                result = json.loads(res_path.read_text())
+                if "message" in result:
+                    st.write(result["message"])
+                
+                # Show full result in debug mode
+                if debug_mode != "Off":
+                    with st.expander("View Full Result", expanded=False):
+                        st.json(result)
             else:
-                st.error("No result.json found.")
+                st.error("No result was generated.")
+                if debug_mode != "Off" and (run_dir / "logs.jsonl").exists():
+                    with st.expander("View Error Logs", expanded=True):
+                        st.code((run_dir / "logs.jsonl").read_text(), language="json")
