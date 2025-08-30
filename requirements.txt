@@ -1,2 +1,6 @@
-streamlit==1.37.*
-pydantic==2.9.*
+streamlit
+pydantic
+pydantic_ai
+google-genai
+python-dotenv
+pyyaml
