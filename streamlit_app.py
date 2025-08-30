@@ -67,7 +67,7 @@ with tabs[0]:
             row["default"] = st.text_input("default (string or JSON)", key=f"default_{i}", value="" if row.get("default") in [None,"None"] else str(row.get("default")))
 
     st.subheader("Tools")
-    tool_names = ["math_eval","string_template","kv_memory","http_get", "web_search"]
+    tool_names = ["math_eval","string_template","kv_memory","http_get", "web_search", "conversational_memory"]
     selected_tools = st.multiselect("Enable tools", tool_names, default=[])
     tools = [ToolRef(name=t) for t in selected_tools]
 
@@ -235,7 +235,7 @@ with tabs[2]:
             input_file.write_text(json.dumps(values, indent=2), encoding="utf-8")
             
             # Build the command
-            cmd = ["python", "sandbox_executor.py", "run", "--agent", str(agent_spec_path), "--input_path", str(input_file), "--out", str(run_dir)]
+            cmd = ["python", "sandbox_executor.py", "run", "--agent", str(agent_spec_path), "--input_path", str(input_file), "--out", str(run_dir), "--run_id", run_id]
             
             # Show command in debug mode
             if debug_mode != "Off":
