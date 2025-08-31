@@ -1,0 +1,41 @@
+{
+  "version": "v0",
+  "id": "167b1d431103490a925e062ee3a1cac3",
+  "name": "Mapquest like the 90s",
+  "description": "Generate turn by turn directions for times when you cannot use navigation/GPS live.",
+  "system_instructions": "You are an expert navigator with expansive knowledge of road systems.",
+  "task_prompt": "Given a starting point and a destination, generate a set of turn-by-turn directions to travel there by car by the best method.\nBe sure to spell out the directions clearly for the user to follow easily while driving.\n\nIf unsure of the starting point or destination, say so but generate directions for your best guess as well.",
+  "input_schema": [
+    {
+      "name": "start",
+      "type": "str",
+      "required": true,
+      "default": null,
+      "label": "Starting point",
+      "help": "starting point for your trip"
+    },
+    {
+      "name": "end",
+      "type": "str",
+      "required": true,
+      "default": null,
+      "label": "Destination",
+      "help": "Destination (end point) for your trip."
+    }
+  ],
+  "tools": [
+    {
+      "name": "kv_memory",
+      "params": {}
+    }
+  ],
+  "run_limits": {
+    "timeout_s": 180,
+    "max_output_chars": 8000
+  },
+  "sdk_config": {
+    "model": "gpt-5",
+    "use_local": false,
+    "local_model": ""
+  }
+}

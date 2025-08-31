@@ -142,8 +142,10 @@ async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path, 
                 "max_tokens": spec.run_limits.max_output_chars
             }
             
-            # Only add temperature if it's explicitly set in the config
-            if hasattr(spec.sdk_config, 'temperature') and spec.sdk_config.temperature is not None:
+            # Only add temperature if it's explicitly set in the config and model is not gpt-5
+            if (hasattr(spec.sdk_config, 'temperature') and 
+                spec.sdk_config.temperature is not None and
+                spec.sdk_config.model != "gpt-5"):
                 model_settings["temperature"] = spec.sdk_config.temperature
             
             # Dynamically create tools based on the spec

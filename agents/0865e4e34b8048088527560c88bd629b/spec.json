@@ -1,0 +1,32 @@
+{
+  "version": "v0",
+  "id": "0865e4e34b8048088527560c88bd629b",
+  "name": "Haiku",
+  "description": "A poet. Ask for a composition.",
+  "system_instructions": "You are an skilled, talented poet. ",
+  "task_prompt": "Given the user's request as specific instructions, write an appropriate poem for them.\n\nIf they specific a type such as Haiku or sonnet, follow their instructions.\nIf they say a topic, compose a poet on that topic.\n\nThink carefully and review your work to make sure it is of the utmost artistic quality before completing the task.\n",
+  "input_schema": [
+    {
+      "name": "request",
+      "type": "str",
+      "required": true,
+      "default": "Write me a limerick on a random topic.",
+      "label": "Request for a poem",
+      "help": "Enter what you would like a poem about and any stylistic constraints"
+    }
+  ],
+  "tools": [
+    {
+      "name": "kv_memory",
+      "params": {}
+    }
+  ],
+  "run_limits": {
+    "timeout_s": 60,
+    "max_output_chars": 8000
+  },
+  "sdk_config": {
+    "model": "gpt-5",
+    "temperature": 0.2
+  }
+}

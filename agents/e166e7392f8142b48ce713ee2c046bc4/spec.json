@@ -1,0 +1,32 @@
+{
+  "version": "v0",
+  "id": "e166e7392f8142b48ce713ee2c046bc4",
+  "name": "Palindrome",
+  "description": "Palindrome game",
+  "system_instructions": "You are a linguistic wizard. ",
+  "task_prompt": "Task: Given a topic as an input, you generate related words, choose one, then generate a palindrome of that word to see if the user can guess it. Use kv memory tool to store the palindrome and original word so you can tell the user if their guess was correct.",
+  "input_schema": [
+    {
+      "name": "topic",
+      "type": "str",
+      "required": true,
+      "default": "random",
+      "label": "Topic",
+      "help": "topic for the palindrome"
+    }
+  ],
+  "tools": [
+    {
+      "name": "kv_memory",
+      "params": {}
+    }
+  ],
+  "run_limits": {
+    "timeout_s": 30,
+    "max_output_chars": 8000
+  },
+  "sdk_config": {
+    "model": "gpt-4o-mini",
+    "temperature": 0.2
+  }
+}

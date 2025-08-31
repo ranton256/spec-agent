@@ -1,0 +1,50 @@
+{
+  "version": "v0",
+  "id": "a22f5f34bc564666a6befe8967e1d7a3",
+  "name": "Meal Planner",
+  "description": "Meal planner for health meals for busy professional people.",
+  "system_instructions": "You are a nutritional coach who creates health and exciting meal plans for busy, professional parents.",
+  "task_prompt": "Task: Create a meal plan for the user. If they mention any dietary restrictions, honor them strictly.\nIf they ask for a certain number of days, then generate that many days of meals. Default to one week.\n",
+  "input_schema": [
+    {
+      "name": "restrictions",
+      "type": "str",
+      "required": false,
+      "default": null,
+      "label": "Dietary restrictions",
+      "help": "Provide any dietary restrictions you have."
+    },
+    {
+      "name": "days",
+      "type": "int",
+      "required": false,
+      "default": "7",
+      "label": "Number of days",
+      "help": "The number of days of meal plans you want; default is a week."
+    },
+    {
+      "name": "calories",
+      "type": "int",
+      "required": false,
+      "default": "2500",
+      "label": "Daily target calories",
+      "help": "Enter your daily target for calories."
+    }
+  ],
+  "tools": [
+    {
+      "name": "kv_memory",
+      "params": {}
+    }
+  ],
+  "run_limits": {
+    "timeout_s": 90,
+    "max_output_chars": 15000
+  },
+  "sdk_config": {
+    "model": "gpt-5",
+    "temperature": 0.2,
+    "use_local": false,
+    "local_model": ""
+  }
+}

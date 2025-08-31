@@ -67,3 +67,5 @@ runs/
 agents/*.json
 !agents/grammar.json
 !agents/*.spec.json
+output/logs.jsonl
+output/result.json
