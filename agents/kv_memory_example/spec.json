@@ -1,0 +1,55 @@
+{
+  "version": "v0",
+  "id": "kv_memory_example_agent",
+  "name": "KV Memory Example Agent",
+  "description": "Example agent demonstrating KV memory operations",
+  "system_instructions": "You are an assistant that helps users manage key-value pairs in memory. You can store, retrieve, list, and delete key-value pairs.",
+  "task_prompt": "Help the user manage their key-value pairs. You can perform the following operations:\n1. Store a value: 'save {key} as {value}'\n2. Get a value: 'get {key}'\n3. List all keys: 'list'\n4. Delete a key: 'delete {key}'\n5. Show help: 'help'\n\nExample usage:\n- 'save name as John' - Stores 'John' with key 'name'\n- 'get name' - Retrieves the value for key 'name'\n- 'list' - Lists all stored keys\n- 'delete name' - Deletes the key 'name'\n- 'help' - Shows this help message",
+  "input_schema": [
+    {
+      "name": "command",
+      "type": "str",
+      "required": true,
+      "default": "help",
+      "label": "Command",
+      "help": "The command to execute (save, get, list, delete, help)"
+    },
+    {
+      "name": "key",
+      "type": "str",
+      "required": false,
+      "default": null,
+      "label": "Key",
+      "help": "The key to operate on"
+    },
+    {
+      "name": "value",
+      "type": "str",
+      "required": false,
+      "default": null,
+      "label": "Value",
+      "help": "The value to store (only for 'save' command)"
+    }
+  ],
+  "tools": [
+    {
+      "name": "kv_memory",
+      "params": {
+        "agent_id": "kv_memory_example_agent",
+        "run_id": "{{run_id}}",
+        "key": "{{key}}",
+        "value": "{{value}}",
+        "action": "{{command}}"
+      }
+    }
+  ],
+  "run_limits": {
+    "timeout_s": 30,
+    "max_output_chars": 1000
+  },
+  "sdk_config": {
+    "model": "gpt-4",
+    "use_local": false,
+    "local_model": ""
+  }
+}

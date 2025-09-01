@@ -3,6 +3,7 @@ from models import AgentSpec, SDKConfig
 from memory import JsonFileMemory
 import tempfile
 from pydantic_ai import Agent, TextOutput
+from pydantic_ai.tools import Tool
 from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -34,9 +35,65 @@ def string_template(template: str, **kwargs):
     except Exception as e:
         return f"Template error: {e}"
 
-KV = {}
-def kv_memory_get(key: str): return KV.get(key)
-def kv_memory_set(key: str, value): KV[key] = value; return "OK"
+class KVMemory:
+    def __init__(self):
+        self.store = {}
+    
+    def get(self, agent_id: str, run_id: str, key: str):
+        """Get a value from the key-value store."""
+        try:
+            return self.store.get(f"{agent_id}:{run_id}", {}).get(key)
+        except Exception as e:
+            return f"Error getting key '{key}': {str(e)}"
+    
+    def set(self, agent_id: str, run_id: str, key: str, value: str):
+        """Set a value in the key-value store."""
+        try:
+            namespace = f"{agent_id}:{run_id}"
+            if namespace not in self.store:
+                self.store[namespace] = {}
+            self.store[namespace][key] = value
+            return "OK"
+        except Exception as e:
+            return f"Error setting key '{key}': {str(e)}"
+    
+    def delete(self, agent_id: str, run_id: str, key: str):
+        """Delete a key from the key-value store."""
+        try:
+            namespace = f"{agent_id}:{run_id}"
+            if namespace in self.store and key in self.store[namespace]:
+                del self.store[namespace][key]
+                return "OK"
+            return f"Key '{key}' not found"
+        except Exception as e:
+            return f"Error deleting key '{key}': {str(e)}"
+    
+    def list_keys(self, agent_id: str, run_id: str):
+        """List all keys in the namespace."""
+        try:
+            namespace = f"{agent_id}:{run_id}"
+            return list(self.store.get(namespace, {}).keys())
+        except Exception as e:
+            return f"Error listing keys: {str(e)}"
+
+# Global KV memory store with namespacing
+kv_store = KVMemory()
+
+def kv_memory_get(agent_id: str, run_id: str, key: str):
+    """Get a value from the key-value store."""
+    return kv_store.get(agent_id, run_id, key)
+
+def kv_memory_set(agent_id: str, run_id: str, key: str, value: str):
+    """Set a value in the key-value store."""
+    return kv_store.set(agent_id, run_id, key, value)
+
+def kv_memory_delete(agent_id: str, run_id: str, key: str):
+    """Delete a key from the key-value store."""
+    return kv_store.delete(agent_id, run_id, key)
+
+def kv_memory_list(agent_id: str, run_id: str):
+    """List all keys in the namespace."""
+    return kv_store.list_keys(agent_id, run_id)
 
 def http_get(url: str, allow: list[str] = None):
     import urllib.request
@@ -48,6 +105,37 @@ def http_get(url: str, allow: list[str] = None):
             return r.read(2000).decode("utf-8","ignore")
     except Exception as e:
         return f"HTTP error: {e}"
+
+def kv_memory_tool(agent_id: str = "", run_id: str = "", key: str = "", value: str = "", action: str = "get") -> str:
+    """
+    Key-Value memory tool for storing and retrieving data.
+    
+    Args:
+        agent_id: ID of the agent
+        run_id: ID of the current run
+        key: Key to operate on
+        value: Value to set (for set operations)
+        action: Action to perform (get, set, delete, list)
+            
+    Returns:
+        Result of the operation as a string
+    """
+    try:
+        if value:
+            # Set operation
+            return kv_memory_set(agent_id, run_id, key, value)
+        elif action == "delete":
+            # Delete operation
+            return kv_memory_delete(agent_id, run_id, key)
+        elif action == "list":
+            # List operation
+            return str(kv_memory_list(agent_id, run_id))
+        else:
+            # Get operation (default)
+            return str(kv_memory_get(agent_id, run_id, key) or "")
+    except Exception as e:
+        return f"Error in kv_memory_tool: {str(e)}"
+
 
 def conversational_memory(cmd: str, entry: Optional[Dict[str, Any]] = None, agent_id: str = None, run_id: str = None):
     if not agent_id or not run_id:
@@ -65,10 +153,48 @@ def conversational_memory(cmd: str, entry: Optional[Dict[str, Any]] = None, agen
     else:
         return "Invalid command"
 
+def create_kv_memory_tool():
+    async def kv_memory_func(agent_id: str = "", run_id: str = "", key: str = "", value: str = "", action: str = "get") -> str:
+        """
+        Key-Value memory tool for storing and retrieving data.
+        
+        Args:
+            agent_id: ID of the agent
+            run_id: ID of the current run
+            key: Key to operate on
+            value: Value to set (for set operations)
+            action: Action to perform (get, set, delete, list)
+                
+        Returns:
+            Result of the operation as a string
+        """
+        try:
+            if value:
+                # Set operation
+                return kv_memory_set(agent_id, run_id, key, value)
+            elif action == "delete":
+                # Delete operation
+                return kv_memory_delete(agent_id, run_id, key)
+            elif action == "list":
+                # List operation
+                return str(kv_memory_list(agent_id, run_id))
+            else:
+                # Get operation (default)
+                return str(kv_memory_get(agent_id, run_id, key) or "")
+        except Exception as e:
+            return f"Error in kv_memory_tool: {str(e)}"
+    
+    return Tool(
+        function=kv_memory_func,
+        name="kv_memory",
+        description="Key-Value memory tool for storing and retrieving data. Use 'set' action with 'value' to store data, 'get' to retrieve, 'delete' to remove, and 'list' to list all keys.",
+        takes_ctx=False
+    )
+
 TOOLS = {
     "math_eval": lambda args: math_eval(args.get("expr","")),
     "string_template": lambda args: string_template(args.get("template",""), **args.get("vars",{})),
-    "kv_memory": lambda args: (kv_memory_set(args["key"], args.get("value")) if "value" in args else kv_memory_get(args["key"])),
+    "kv_memory": create_kv_memory_tool(),
     "http_get": lambda args: http_get(args.get("url",""), allow=args.get("allow",[])),
     "web_search": duckduckgo_search_tool(),
     "conversational_memory": lambda args: conversational_memory(
@@ -152,11 +278,20 @@ async def run_agent_async(spec: AgentSpec, inputs: dict, out_dir: pathlib.Path, 
             enabled_tools = []
             if spec.tools:
                 for tool_ref in spec.tools:
-                    if tool_ref.name in TOOLS:
+                    if tool_ref.name == "kv_memory":
+                        # Special handling for kv_memory tool
+                        tool = Tool(
+                            function=kv_memory_tool,
+                            name="kv_memory",
+                            description="Key-Value memory tool for storing and retrieving data. Use 'set' action with 'value' to store data, 'get' to retrieve, 'delete' to remove, and 'list' to list all keys.",
+                            takes_ctx=False
+                        )
+                        enabled_tools.append(tool)
+                    elif tool_ref.name in TOOLS:
+                        # For other tools, use the existing TOOLS dictionary
                         tool_func = TOOLS[tool_ref.name]
-                        # Pass agent_id and run_id to the tool's arguments
-                        tool_with_context = lambda args, s=spec, r=run_id, tf=tool_func: tf({**args, 'agent_id': s.id, 'run_id': r})
-                        enabled_tools.append(tool_with_context)
+                        if callable(tool_func):
+                            enabled_tools.append(tool_func)
 
             agent = Agent(
                 model=spec.sdk_config.model,

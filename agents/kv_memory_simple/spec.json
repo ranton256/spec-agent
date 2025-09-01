@@ -1,0 +1,53 @@
+{
+  "version": "v0",
+  "id": "kv_memory_simple",
+  "name": "KV Memory Simple",
+  "description": "Simplified agent to test KV memory operations",
+  "system_instructions": "You are a simple agent that can store and retrieve key-value pairs.",
+  "task_prompt": "Store or retrieve a value. Example: 'save name as John' or 'get name'",
+  "input_schema": [
+    {
+      "name": "key",
+      "type": "str",
+      "required": true,
+      "label": "Key",
+      "help": "The key to operate on"
+    },
+    {
+      "name": "value",
+      "type": "str",
+      "required": false,
+      "label": "Value",
+      "help": "The value to store (only for 'save' command)"
+    },
+    {
+      "name": "action",
+      "type": "str",
+      "required": true,
+      "default": "get",
+      "enum": ["get", "set", "delete", "list"],
+      "label": "Action",
+      "help": "The action to perform"
+    }
+  ],
+  "tools": [
+    {
+      "name": "kv_memory",
+      "params": {
+        "key": "{{key}}",
+        "value": "{{value}}",
+        "action": "{{action}}"
+      },
+      "description": "Key-Value memory tool for storing and retrieving data. Use 'set' action with 'value' to store data, 'get' to retrieve, 'delete' to remove, and 'list' to list all keys."
+    }
+  ],
+  "run_limits": {
+    "timeout_s": 30,
+    "max_output_chars": 1000
+  },
+  "sdk_config": {
+    "model": "gpt-4",
+    "use_local": false,
+    "local_model": ""
+  }
+}
