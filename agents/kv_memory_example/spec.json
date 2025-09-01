@@ -48,7 +48,7 @@
     "max_output_chars": 1000
   },
   "sdk_config": {
-    "model": "gpt-4",
+    "model": "gpt-4o-mini",
     "use_local": false,
     "local_model": ""
   }

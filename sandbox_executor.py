@@ -335,18 +335,52 @@ Inputs:
         # Log the response
         log("model_output", response=response_text, response_type=type(response).__name__)
         
+        # Extract tool calls from response
+        tool_results = []
+        if hasattr(response, 'all_messages'):
+            for msg in response.all_messages():
+                if hasattr(msg, 'parts'):
+                    for part in msg.parts:
+                        if hasattr(part, 'tool_name') and hasattr(part, 'args'):
+                            # This is a tool call
+                            tool_call_info = {
+                                "tool_name": part.tool_name,
+                                "args": part.args,
+                                "tool_call_id": getattr(part, 'tool_call_id', None)
+                            }
+                            tool_results.append(tool_call_info)
+                        elif hasattr(part, 'tool_name') and hasattr(part, 'content'):
+                            # This is a tool result
+                            tool_result_info = {
+                                "tool_name": part.tool_name,
+                                "result": part.content,
+                                "tool_call_id": getattr(part, 'tool_call_id', None)
+                            }
+                            tool_results.append(tool_result_info)
+
+        # Extract usage information
+        usage_info = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
+        if hasattr(response, 'usage') and callable(response.usage):
+            usage = response.usage()
+            if hasattr(usage, 'request_tokens'):
+                usage_info["prompt_tokens"] = usage.request_tokens
+            if hasattr(usage, 'response_tokens'):
+                usage_info["completion_tokens"] = usage.response_tokens
+            if hasattr(usage, 'total_tokens'):
+                usage_info["total_tokens"] = usage.total_tokens
+
         # Create result object
         result = {
             "message": response_text,
-            "tool_results": [],
+            "tool_results": tool_results,
             "inputs": inputs,
             "model_metadata": {
-                "model": "gpt-5",
-                "usage": {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0
-                }
+                "model": spec.sdk_config.model,
+                "usage": usage_info
             }
         }
         
