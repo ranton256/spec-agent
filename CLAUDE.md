@@ -110,3 +110,5 @@ Supports multiple backends via `SDKConfig`:
 - HTTP requests restricted to explicitly allowed domains
 - Safe mathematical expression evaluation with limited scope
 - Subprocess isolation for agent execution
+- all functionality in commits must be covered by automated testing new and/or existing.
+- Keep logic in UI layer to a bare minimum to maximize testability and ease of maintainence.

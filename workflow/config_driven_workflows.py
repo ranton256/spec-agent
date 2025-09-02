@@ -4,6 +4,9 @@ from typing import Dict, Any, List, Optional, Callable
 from pydantic import BaseModel, Field
 from enum import Enum
 
+# Import WorkflowGraph and related classes
+from .pydantic_workflow import WorkflowGraph, WorkflowNode, AgentNode, ConditionNode, LoopNode
+
 # Configuration Models for JSON/YAML Definition
 class NodeConfig(BaseModel):
     """Configuration for a workflow node"""

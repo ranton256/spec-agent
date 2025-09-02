@@ -1,5 +1,5 @@
 import argparse, json, os, sys, pathlib, signal, time, platform, asyncio, traceback
-from models import AgentSpec, SDKConfig
+from models import AgentSpec, SDKConfig, WorkflowSpec, WorkflowExecutionResult
 from memory import JsonFileMemory
 import tempfile
 from pydantic_ai import Agent, TextOutput
@@ -712,6 +712,52 @@ def smoke_test():
         except Exception as e:
             print(f"❌ Smoke test failed: {str(e)}")
             return False
+
+# Workflow execution functions
+async def run_workflow_async(workflow_spec: WorkflowSpec, initial_inputs: Dict[str, Any]) -> WorkflowExecutionResult:
+    """Execute a workflow specification asynchronously"""
+    try:
+        # Import here to avoid circular imports
+        from workflow_adapter import SpecAgentWorkflowExecutor
+        
+        executor = SpecAgentWorkflowExecutor(workflow_spec)
+        return await executor.execute(initial_inputs)
+        
+    except Exception as e:
+        # Create error result
+        return WorkflowExecutionResult(
+            workflow_id=workflow_spec.id,
+            execution_id="error",
+            status="failed",
+            error_message=str(e)
+        )
+
+def run_workflow(workflow_spec: WorkflowSpec, initial_inputs: Dict[str, Any]) -> WorkflowExecutionResult:
+    """Execute a workflow specification synchronously"""
+    return asyncio.run(run_workflow_async(workflow_spec, initial_inputs))
+
+async def load_and_run_workflow(workflow_path: str, initial_inputs: Dict[str, Any]) -> WorkflowExecutionResult:
+    """Load a workflow from file and execute it"""
+    try:
+        with open(workflow_path, 'r') as f:
+            if workflow_path.endswith('.json'):
+                workflow_data = json.load(f)
+            elif workflow_path.endswith(('.yml', '.yaml')):
+                import yaml
+                workflow_data = yaml.safe_load(f)
+            else:
+                raise ValueError(f"Unsupported file format: {workflow_path}")
+        
+        workflow_spec = WorkflowSpec(**workflow_data)
+        return await run_workflow_async(workflow_spec, initial_inputs)
+        
+    except Exception as e:
+        return WorkflowExecutionResult(
+            workflow_id="unknown",
+            execution_id="error",
+            status="failed",
+            error_message=f"Failed to load workflow from {workflow_path}: {str(e)}"
+        )
 
 if __name__ == "__main__":
     # Load environment variables from .env file
