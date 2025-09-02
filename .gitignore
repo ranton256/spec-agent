@@ -69,3 +69,6 @@ agents/*.json
 !agents/*.spec.json
 output/logs.jsonl
 output/result.json
+.claude/
+test_output/
+output/
